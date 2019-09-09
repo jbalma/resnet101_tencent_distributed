@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 """
 Tencent is pleased to support the open source community by making Tencent ML-Images available.
 Copyright (C) 2018 THL A29 Limited, a Tencent company. All rights reserved.
@@ -8,10 +12,6 @@ Unless required by applicable law or agreed to in writing, software distributed 
 
 
 """Runs a ResNet model on the ImageNet dataset."""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import os
 import sys
 import math
@@ -22,6 +22,8 @@ from data_processing import dataset as file_db
 from data_processing import image_preprocessing as image_preprocess
 from models import resnet as resnet
 from flags import FLAGS
+import horovod.tensorflow as hvd
+
 
 def record_parser_fn(value, is_training):
   """Parse an image record from `value`."""
@@ -62,8 +64,8 @@ def input_fn(is_training, data_dir, batch_size, num_epochs=1):
   else:
     dataset = file_db.Dataset(os.path.join(data_dir, 'val'))
 
-  worker_id = 0
-  worker_num = 1
+  worker_id = hvd.rank()
+  worker_num = hvd.size()
 
   dataset = tf.data.Dataset.from_tensor_slices(dataset.data_files())
 
@@ -212,6 +214,7 @@ def resnet_model_fn(features, labels, mode, params):
         learning_rate=lr,
         momentum=FLAGS.opt_momentum)
 
+    optimizer = hvd.DistributedOptimizer(optimizer)
     # Batch norm requires update_ops to be added as a train_op dependency.
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
@@ -237,11 +240,16 @@ def main(_):
   # Using the Winograd non-fused algorithms provides a small performance boost.
   os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = '1'
 
+  # Horovod: initialize Horovod.
+  hvd.init()
+
+  # Horovod: pin GPU to be used to process local rank (one GPU per process)
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True
-  config.gpu_options.visible_device_list = str(FLAGS.visiable_gpu)
+  config.gpu_options.visible_device_list = str(hvd.local_rank())
+  #K.set_session(tf.Session(config=config))
 
-  model_path = FLAGS.model_dir
+  model_path = FLAGS.model_dir if hvd.rank() == 0 else None
   max_ckp_num = (FLAGS.max_to_keep)
   run_config = tf.estimator.RunConfig(save_checkpoints_steps=FLAGS.snapshot,
                                       keep_checkpoint_max=max_ckp_num,
@@ -267,7 +275,13 @@ def main(_):
       tensors=tensors_to_log, every_n_iter=FLAGS.log_interval, at_end=True)
 
   print('Total run steps = {}'.format(FLAGS.max_iter))
-  hook_list = [logging_hook] 
+
+  
+  #jbalma added broadcast
+  bcast_hook = hvd.BroadcastGlobalVariablesHook(0)
+
+  hook_list = [bcast_hook,logging_hook]
+
   resnet_classifier.train(
     input_fn=lambda: input_fn(True, FLAGS.data_dir, FLAGS.batch_size),
     steps=FLAGS.max_iter,

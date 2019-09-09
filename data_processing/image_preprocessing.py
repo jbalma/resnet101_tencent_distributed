@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 """
 Tencent is pleased to support the open source community by making Tencent ML-Images available.
 Copyright (C) 2018 THL A29 Limited, a Tencent company. All rights reserved.
@@ -12,9 +16,6 @@ Unless required by applicable law or agreed to in writing, software distributed 
   preprocessed in parallel across multiple threads. The resulting images
   are concatenated together to form a single batch for training or evaluation.
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import math
 import tensorflow as tf
