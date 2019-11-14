@@ -90,8 +90,8 @@ tf.app.flags.DEFINE_integer('prof_interval', 10,
    "iterations for print training time cost")
 tf.app.flags.DEFINE_integer('log_interval', 0,
   "iterations for print summery log")
-tf.app.flags.DEFINE_string('log_dir', './out/log/',
-   "Directory where to write event logs")
+#tf.app.flags.DEFINE_string('log_dir', './out/log/',
+#   "Directory where to write event logs")
 tf.app.flags.DEFINE_string('model_dir', './out/checkpoint/',
    "path for saving learned tf model")
 tf.app.flags.DEFINE_string('tmp_model_dir', './out/tmp/checkpoint/',

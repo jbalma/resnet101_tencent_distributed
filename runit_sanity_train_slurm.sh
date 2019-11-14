@@ -1,32 +1,39 @@
 #!/bin/bash
-#SBATCH -N 8
-#SBATCH -C P100
-#SBATCH --gres=gpu
-#SBATCH --exclusive
+source ./config.sh 
+INSTALL_DIR=/lus/scratch/${USERNAME}/condaenv_cpu_tf15 
+# Setup programming environment
+module unload PrgEnv-cray
+module load PrgEnv-gnu
+module unload craype-hugepages8M
+module unload atp
+source activate $INSTALL_DIR
 
-source ./setup_env_cuda10_cray.sh
-source ./env_python.sh
-#module load craype-ml-plugin-py2
-#module load craype-dl-plugin-py3
+
+which python
 #module list
-export SCRATCH=/lus/scratch/jbalma
+export SCRATCH=/lus/scratch/${USERNAME}
 export MPICH_ENV_DISPLAY=1
 export MPICH_VERSION_DISPLAY=1
 export MPICH_CPUMASK_DISPLAY=1
 #export MPICH_COLL_SYNC=1 #force everyone into barrier before each collective
 #export MPICH_RDMA_ENABLED_CUDA=1
 export MPICH_MAX_THREAD_SAFETY=multiple
-#export CRAY_CUDA_MPS=1
-export CUDA_VISIBLE_DEVICES=0
-#export CRAY_CUDA_PROXY=0
+
+module rm atp
+
+#export HOROVOD_MPI_THREADS_DISABLE=1
+#export HOROVOD_FUSION_THRESHOLD=0
+#export HOROVOD_TIMELINE_MARK_CYCLES=1
+#export HOROVOD_CYCLE_TIME=3.5
+export OMP_NUM_THREADS=72
 
 echo "Running..."
-NP=8
-NODES=8
-BATCH_SIZE=1
+NP=256
+NODES=256
+BATCH_SIZE=4
 NUM_EPOCHS=100
 
-WKDIR=/lus/scratch/${USER}/resnet_cifar10_keras_horovod_xc50p100_run_${NODES}nodes_${NP}np_${BATCH_SIZE}lbs_${NUM_EPOCHS}epochs
+WKDIR=/lus/scratch/${USER}/resnet101_tencent_horovod_xc50p100_run_${NODES}nodes_${NP}np_${BATCH_SIZE}lbs_${NUM_EPOCHS}epochs
 rm -rf $WKDIR
 mkdir -p $WKDIR
 
@@ -34,7 +41,7 @@ mkdir -p $WKDIR
 set -x 
 
 # Parameters for the training
-DATASET_DIR=/lus/scratch/${USER}/DataSets/TenCent/tencent-ml-images/data/tfrecords 
+DATASET_DIR=/lus/scratch/${USER}/DataSets/resnet101_tencent_distributed/data/tfrecords-full
 WITH_BBOX=FALSE
 IMG_SIZE=224
 CLASSNUM=11166
@@ -61,19 +68,15 @@ if [[ ! -d $LOG_DIR ]]; then
   mkdir -p $LOG_DIR
 fi
 
-#--model_dir=./out/checkpoint/imagenet/resnet_model_${NODE_NUM}node_${GPU_NUM}gpu \
-#--tmp_model_dir=./out/tmp/imagenet/resnet_model_${NODE_NUM}node_${GPU_NUM}gpu \
-
 cp -r * $WKDIR/
 cd $WKDIR/
 echo $PWD
-#export PYTHONPATH="${PYTHONPATH}:$PWD/cray_keras_utils"
 mkdir checkpoint
 export SLURM_WORKING_DIR=$WKDIR
-#export TF_CPP_MIN_LOG_LEVEL=3
+#export TF_CPP_MIN_LOG_LEVEL=0
 #export TF_CPP_MIN_VLOG_LEVEL=0
 
-time srun -N ${NODES} -l --ntasks=${NP} --ntasks-per-node=1 -C P100 --gres=gpu --exclusive --cpu_bind=none -u python train.py \
+time srun -N ${NODES} -l --ntasks=${NP} --ntasks-per-node=1 -C P100 --gres=gpu --exclusive -u python train.py \
 	--data_dir=${DATASET_DIR} \
     --image_size=${IMG_SIZE} \
 	--class_num=${CLASSNUM} \

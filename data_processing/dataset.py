@@ -28,7 +28,7 @@ class Dataset(object):
 		self.record_pattern = record_pattern
 
 	def data_filter(self, file_name):
-		idx = int(file_name.split('/')[-1].split('.tfrecords')[0])
+		idx_str = int(str(file_name.split('/')[-1].split('-of-*')[0]).split('*-')[1])
 		return (idx % len(self.worker_hosts) == self.task_id)
 
 	def data_files(self):
@@ -39,7 +39,7 @@ class Dataset(object):
 			ValueError: if there are not data_files in the data dir
 		"""
 		tf_record_pattern = os.path.join(self.data_dir, self.record_pattern)
-		data_files = tf.gfile.Glob(tf_record_pattern)
+		data_files = tf.io.gfile.glob(tf_record_pattern)
 		data_files = filter(self.data_filter, data_files) if self.use_split else data_files
 		if not data_files:
 			print('No files found for in data dir %s' % (self.data_dir))
